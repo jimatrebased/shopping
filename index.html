@@ -110,6 +110,24 @@
     font-weight: 500; font-size: 14px; cursor: pointer;
   }
   .settings-note { font-size: 9px; line-height: 1.6; opacity: 0.8; margin-top: 14px; }
+  .settings-toggle-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 2px; border-top: 2px solid rgba(255,255,255,0.35); margin-top: 14px;
+  }
+  .settings-toggle-label { font-size: 12px; font-weight: 700; letter-spacing: 0.02em; line-height: 1.3; }
+  .settings-toggle-label small { display: block; font-size: 9px; opacity: 0.7; font-weight: 500; letter-spacing: 0.04em; margin-top: 2px; }
+  .switch { position: relative; width: 46px; height: 26px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch-track {
+    position: absolute; inset: 0; background: rgba(255,255,255,0.25); border-radius: 999px;
+    cursor: pointer; transition: background 0.15s ease; border: 2px solid rgba(255,255,255,0.55);
+  }
+  .switch-track::before {
+    content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 2px;
+    background: var(--white); border-radius: 50%; transition: transform 0.15s ease;
+  }
+  .switch input:checked + .switch-track { background: var(--yellow); border-color: var(--yellow); }
+  .switch input:checked + .switch-track::before { transform: translateX(20px); background: var(--maroon); }
 
   .mic-section {
     position: relative; display: flex; flex-direction: column; align-items: center; gap: 16px;
@@ -251,6 +269,13 @@
       KEY STAYS ON THIS DEVICE. SENT DIRECTLY TO GOOGLE ONLY.<br />
       GET ONE AT <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">AISTUDIO.GOOGLE.COM/APIKEY</a>
     </div>
+    <div class="settings-toggle-row">
+      <span class="settings-toggle-label">Anti-capitalist commentary<small>Gemini editorializes on what you add</small></span>
+      <label class="switch">
+        <input type="checkbox" id="snarkToggle" />
+        <span class="switch-track"></span>
+      </label>
+    </div>
   </div>
 
   <div class="mic-section">
@@ -305,6 +330,7 @@
   const LS_API_KEY = "gemini_shopping_api_key";
   const LS_LIST = "gemini_shopping_list_items";
   const LS_TRACKED = "gemini_shopping_tracked_total";
+  const LS_SNARK = "gemini_shopping_snark_mode";
   const MODEL = "gemini-3.1-flash-live-preview";
 
   function loadKey() { return localStorage.getItem(LS_API_KEY) || ""; }
@@ -323,9 +349,18 @@
   }
   function saveTracked() { localStorage.setItem(LS_TRACKED, String(trackedTotal)); }
 
+  // Anti-capitalist commentary toggle — defaults on (matches current behavior)
+  // for anyone who already has the app installed and never sees this setting.
+  function loadSnarkMode() {
+    const v = localStorage.getItem(LS_SNARK);
+    return v === null ? true : v === "1";
+  }
+  function saveSnarkMode(on) { localStorage.setItem(LS_SNARK, on ? "1" : "0"); }
+
   let items = loadItems(); // [{id, text, done}]
   let nextId = items.reduce((m, it) => Math.max(m, it.id || 0), 0) + 1;
   let trackedTotal = loadTracked(); // lifetime count of items ever added, just for the footer flourish
+  let snarkMode = loadSnarkMode();
 
   // ---------- DOM ----------
   const el = (id) => document.getElementById(id);
@@ -337,6 +372,7 @@
   const apiKeyInput = el("apiKeyInput");
   const saveKeyBtn = el("saveKeyBtn");
   const clearKeyBtn = el("clearKeyBtn");
+  const snarkToggle = el("snarkToggle");
   const micBtn = el("micBtn");
   const micRing = el("micRing");
   const micHint = el("micHint");
@@ -377,6 +413,20 @@
     clearKey();
     disconnect();
     refreshSettingsVisibility();
+  });
+
+  snarkToggle.checked = snarkMode;
+  snarkToggle.addEventListener("change", () => {
+    snarkMode = snarkToggle.checked;
+    saveSnarkMode(snarkMode);
+    // The personality is set once per session via systemInstruction, not
+    // re-sent per turn — so force a fresh connection now, otherwise the old
+    // personality keeps talking until the session happens to drop on its own.
+    if (ws || wsReady) {
+      if (live) { stopMic(); live = false; }
+      disconnect();
+      setConnected(null);
+    }
   });
 
   // ---------- List rendering ----------
@@ -499,23 +549,33 @@
   }
 
   // ---------- Gemini Live API ----------
-  const SYSTEM_INSTRUCTION =
-    "You are a voice-controlled shopping list assistant running inside a single-purpose app, but your " +
-    "personality is a committed anti-capitalist who is scathing about consumerism. " +
+  const BASE_INSTRUCTION =
+    "You are a voice-controlled shopping list assistant running inside a single-purpose app. " +
     "The app has one real shopping list, which you access ONLY through the add_items, remove_items, " +
     "clear_list and get_list tools — never guess or rely on memory for what's on the list, always call " +
-    "get_list if you need to check it first. Always actually perform the requested action via the tools " +
-    "first — the commentary is on top of the action, never instead of it. " +
+    "get_list if you need to check it first. " +
     "Style rules, follow these strictly: do not apologise for anything, ever. Do not comment on the user's " +
     "mood, tone, stress, or emotional state. Do not use filler phrases like 'I understand', 'no problem', " +
-    "'great question', or 'certainly'. " +
-    "For every add_items or remove_items call, first confirm briefly what changed, then add one short, sharp " +
-    "remark about the specific item(s) from an anti-capitalist, anti-consumerist perspective — e.g. mocking " +
-    "brand loyalty, planned obsolescence, supply chains, advertising, overconsumption, or corporate profit — " +
-    "keep it clever and specific to the actual item, not generic sloganeering, and keep the whole reply to two " +
-    "sentences at most. For get_list or clear_list, one sentence confirming the result is enough, with commentary " +
-    "only if it fits naturally. Never refuse to add or remove an item because of your politics — you still do " +
-    "the job, you just narrate it in character.";
+    "'great question', or 'certainly'. ";
+
+  const PLAIN_STYLE =
+    "Keep every spoken reply to one short sentence confirming what happened, for example 'Added milk and " +
+    "eggs.' or 'List: milk, eggs, bread.' or 'Removed eggs.'";
+
+  const SNARK_STYLE =
+    "Your personality is a committed anti-capitalist who is scathing about consumerism. Always actually " +
+    "perform the requested action via the tools first — the commentary is on top of the action, never " +
+    "instead of it. For every add_items or remove_items call, first confirm briefly what changed, then add " +
+    "one short, sharp remark about the specific item(s) from an anti-capitalist, anti-consumerist perspective " +
+    "— e.g. mocking brand loyalty, planned obsolescence, supply chains, advertising, overconsumption, or " +
+    "corporate profit — keep it clever and specific to the actual item, not generic sloganeering, and keep " +
+    "the whole reply to two sentences at most. For get_list or clear_list, one sentence confirming the result " +
+    "is enough, with commentary only if it fits naturally. Never refuse to add or remove an item because of " +
+    "your politics — you still do the job, you just narrate it in character.";
+
+  function getSystemInstruction() {
+    return BASE_INSTRUCTION + (snarkMode ? SNARK_STYLE : PLAIN_STYLE);
+  }
 
   const TOOLS = [
     {
@@ -606,7 +666,7 @@
           setup: {
             model: "models/" + MODEL,
             generationConfig: { responseModalities: ["AUDIO"] },
-            systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
+            systemInstruction: { parts: [{ text: getSystemInstruction() }] },
             tools: TOOLS,
             inputAudioTranscription: {},
             outputAudioTranscription: {}
