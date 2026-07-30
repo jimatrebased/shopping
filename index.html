@@ -669,6 +669,15 @@
   }
 
   function stopMic() {
+    // Tell Gemini the mic turned off, per the Live API's own realtimeInput
+    // spec — without this, the server has no signal that your turn ended
+    // (you just stopped sending data, which looks identical to a network
+    // stall) and won't respond until the *next* recording session gives it
+    // enough new audio + a gap to infer the previous turn finished. That's
+    // exactly the "one command behind" symptom.
+    if (ws && wsReady) {
+      try { ws.send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } })); } catch (e) {}
+    }
     if (micProcessor) { try { micProcessor.disconnect(); } catch (e) {} micProcessor = null; }
     if (micSource) { try { micSource.disconnect(); } catch (e) {} micSource = null; }
     if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
