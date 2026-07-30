@@ -479,6 +479,11 @@
           reject(new Error("closed before ready: " + event.code + " " + (event.reason || "")));
         }
         stopMic();
+        // The socket died on its own (session limit, network blip, phone
+        // sleeping, etc.) — reset the button's state machine so the very next
+        // tap reconnects, instead of the tap thinking it needs to "stop"
+        // something that already stopped.
+        live = false;
       };
     });
   }
@@ -507,6 +512,15 @@
       const m = msg.error.message || JSON.stringify(msg.error);
       logLine("gemini", "[error] " + m);
       setStatus("error: " + m, "error");
+      return;
+    }
+
+    if (msg.goAway) {
+      // Gemini Live sessions have a maximum duration and the server warns
+      // shortly before cutting the connection — this is expected, not a bug.
+      // The onclose handler that follows will reset things so the next tap
+      // on the mic just starts a fresh session.
+      logLine("gemini", "[session] Gemini is about to end this session (time limit) — tap the mic again after it drops to reconnect.");
       return;
     }
 
