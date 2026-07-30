@@ -210,19 +210,26 @@
   settingsToggle.addEventListener("click", () => {
     settingsPanel.classList.toggle("hidden");
   });
-  saveKeyBtn.addEventListener("click", () => {
+  saveKeyBtn.addEventListener("click", async () => {
     const v = apiKeyInput.value.trim();
     if (!v) return;
     saveKey(v);
     apiKeyInput.value = "";
     settingsPanel.classList.add("hidden");
-    setStatus("key saved", "");
+    setStatus("testing key…", "");
+    try {
+      await connect();
+      logLine("gemini", "[key test] Connected to Gemini successfully.");
+      disconnect({ text: "key verified — tap the mic to talk", cls: "connected" });
+    } catch (e) {
+      console.error(e);
+      // onclose/onerror already set a specific status + transcript line
+    }
   });
   clearKeyBtn.addEventListener("click", () => {
     clearKey();
-    disconnect();
+    disconnect({ text: "not connected", cls: "" });
     refreshSettingsVisibility();
-    setStatus("not connected", "");
   });
 
   // ---------- List rendering ----------
@@ -383,9 +390,31 @@
 
   let ws = null;
   let wsReady = false;
+  let intentionalClose = false;
+  let intentionalCloseStatus = null;
 
   function wsUrl(apiKey) {
     return "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" + encodeURIComponent(apiKey);
+  }
+
+  // Turns a raw WebSocket close code into something a non-developer can act on.
+  // Google's servers reject a bad/unauthorized API key by failing the connection
+  // outright, which browsers surface as a generic 1006 with no reason text —
+  // that's the single most likely cause if this fires right after saving a key.
+  function describeClose(code, reason) {
+    const r = (reason || "").trim();
+    switch (code) {
+      case 1000:
+        return "not connected";
+      case 1006:
+        return "connection failed (1006) — check the API key is correct, has no extra spaces, and Generative Language API access is enabled for it";
+      case 1008:
+        return "rejected by server (1008)" + (r ? ": " + r : " — likely an invalid or unauthorized API key");
+      case 1011:
+        return "server error (1011)" + (r ? ": " + r : "");
+      default:
+        return "closed (" + code + ")" + (r ? ": " + r : "");
+    }
   }
 
   function connect() {
@@ -396,6 +425,7 @@
       return Promise.reject(new Error("no key"));
     }
     return new Promise((resolve, reject) => {
+      let settled = false;
       setStatus("connecting…", "");
       ws = new WebSocket(wsUrl(key));
       ws.onopen = () => {
@@ -411,23 +441,40 @@
         };
         ws.send(JSON.stringify(configMessage));
         wsReady = true;
+        settled = true;
         setStatus("connected", "connected");
         resolve();
       };
       ws.onmessage = (event) => handleServerMessage(event.data);
-      ws.onerror = () => {
-        setStatus("connection error", "error");
-        reject(new Error("ws error"));
+      ws.onerror = (e) => {
+        // The WebSocket error event never carries a reason (browser security
+        // restriction) — the real detail comes from the close event right after.
+        console.error("Gemini WebSocket error", e);
       };
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         wsReady = false;
-        setStatus("not connected", "");
+        if (intentionalClose) {
+          const s = intentionalCloseStatus || { text: "not connected", cls: "" };
+          setStatus(s.text, s.cls);
+          intentionalClose = false;
+          intentionalCloseStatus = null;
+        } else {
+          const desc = describeClose(event.code, event.reason);
+          setStatus(desc, "error");
+          logLine("gemini", "[disconnected] " + desc);
+        }
+        if (!settled) {
+          settled = true;
+          reject(new Error("closed before ready: " + event.code + " " + (event.reason || "")));
+        }
         stopMic();
       };
     });
   }
 
-  function disconnect() {
+  function disconnect(afterStatus) {
+    intentionalClose = true;
+    intentionalCloseStatus = afterStatus || { text: "not connected", cls: "" };
     if (ws) { try { ws.close(); } catch (e) {} }
     ws = null;
     wsReady = false;
@@ -438,6 +485,12 @@
     try {
       msg = typeof raw === "string" ? JSON.parse(raw) : JSON.parse(await raw.text());
     } catch (e) { return; }
+
+    if (msg.error) {
+      const m = msg.error.message || JSON.stringify(msg.error);
+      logLine("gemini", "[error] " + m);
+      setStatus("error: " + m, "error");
+    }
 
     if (msg.serverContent) {
       const sc = msg.serverContent;
@@ -607,12 +660,18 @@
       micBtn.disabled = true;
       try {
         if (!ws || !wsReady) await connect();
-        await startMic();
+        try {
+          await startMic();
+        } catch (micErr) {
+          setStatus("microphone permission denied", "error");
+          logLine("gemini", "[error] " + micErr.message);
+          throw micErr;
+        }
         live = true;
         micBtn.classList.add("live");
         micHint.textContent = "Listening… tap to stop";
       } catch (e) {
-        setStatus("mic/connect failed", "error");
+        // connect() failures already set a specific status + transcript line
         console.error(e);
       } finally {
         micBtn.disabled = false;
