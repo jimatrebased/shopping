@@ -110,24 +110,27 @@
     font-weight: 500; font-size: 14px; cursor: pointer;
   }
   .settings-note { font-size: 9px; line-height: 1.6; opacity: 0.8; margin-top: 14px; }
-  .settings-toggle-row {
-    display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    padding: 12px 2px; border-top: 2px solid rgba(255,255,255,0.35); margin-top: 14px;
+  .settings-persona {
+    padding-top: 14px; margin-top: 14px; border-top: 2px solid rgba(255,255,255,0.35);
   }
-  .settings-toggle-label { font-size: 12px; font-weight: 700; letter-spacing: 0.02em; line-height: 1.3; }
-  .settings-toggle-label small { display: block; font-size: 9px; opacity: 0.7; font-weight: 500; letter-spacing: 0.04em; margin-top: 2px; }
-  .switch { position: relative; width: 46px; height: 26px; flex: none; }
-  .switch input { opacity: 0; width: 0; height: 0; }
-  .switch-track {
-    position: absolute; inset: 0; background: rgba(255,255,255,0.25); border-radius: 999px;
-    cursor: pointer; transition: background 0.15s ease; border: 2px solid rgba(255,255,255,0.55);
+  .settings-persona-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.14em; opacity: 0.8; margin-bottom: 9px;
   }
-  .switch-track::before {
-    content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 2px;
-    background: var(--white); border-radius: 50%; transition: transform 0.15s ease;
+  .persona-group { display: flex; flex-direction: column; gap: 7px; }
+  .persona-btn {
+    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+    padding: 11px 14px; border: 2px solid rgba(255,255,255,0.55); border-radius: 16px;
+    background: transparent; color: var(--white); font-family: 'Fredoka', sans-serif; cursor: pointer;
   }
-  .switch input:checked + .switch-track { background: var(--yellow); border-color: var(--yellow); }
-  .switch input:checked + .switch-track::before { transform: translateX(20px); background: var(--maroon); }
+  .persona-btn .dot {
+    width: 10px; height: 10px; min-width: 10px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.7);
+  }
+  .persona-btn .txt { display: flex; flex-direction: column; }
+  .persona-btn .name { font-weight: 600; font-size: 14px; }
+  .persona-btn .desc { font-size: 9px; opacity: 0.7; letter-spacing: 0.02em; margin-top: 1px; }
+  .persona-btn.active { background: var(--yellow); border-color: var(--yellow); color: var(--maroon); }
+  .persona-btn.active .dot { background: var(--maroon); border-color: var(--maroon); }
+  .persona-btn.active .desc { opacity: 0.75; }
 
   .mic-section {
     position: relative; display: flex; flex-direction: column; align-items: center; gap: 16px;
@@ -269,12 +272,22 @@
       KEY STAYS ON THIS DEVICE. SENT DIRECTLY TO GOOGLE ONLY.<br />
       GET ONE AT <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">AISTUDIO.GOOGLE.COM/APIKEY</a>
     </div>
-    <div class="settings-toggle-row">
-      <span class="settings-toggle-label">Anti-capitalist commentary<small>Gemini editorializes on what you add</small></span>
-      <label class="switch">
-        <input type="checkbox" id="snarkToggle" />
-        <span class="switch-track"></span>
-      </label>
+    <div class="settings-persona">
+      <div class="mono settings-persona-label">&#9632; GEMINI'S PERSONALITY</div>
+      <div class="persona-group" id="personaGroup">
+        <button type="button" class="persona-btn" data-persona="plain">
+          <span class="dot"></span>
+          <span class="txt"><span class="name">Plain</span><span class="desc">One short sentence, no commentary</span></span>
+        </button>
+        <button type="button" class="persona-btn" data-persona="anticap">
+          <span class="dot"></span>
+          <span class="txt"><span class="name">Anti-capitalist</span><span class="desc">Editorializes against consumerism</span></span>
+        </button>
+        <button type="button" class="persona-btn" data-persona="bored_brit">
+          <span class="dot"></span>
+          <span class="txt"><span class="name">Bored British woman</span><span class="desc">Dry, deadpan, thoroughly unimpressed</span></span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -330,7 +343,9 @@
   const LS_API_KEY = "gemini_shopping_api_key";
   const LS_LIST = "gemini_shopping_list_items";
   const LS_TRACKED = "gemini_shopping_tracked_total";
-  const LS_SNARK = "gemini_shopping_snark_mode";
+  const LS_SNARK = "gemini_shopping_snark_mode"; // legacy boolean, migrated below
+  const LS_PERSONA = "gemini_shopping_persona";
+  const PERSONAS = ["plain", "anticap", "bored_brit"];
   const MODEL = "gemini-3.1-flash-live-preview";
 
   function loadKey() { return localStorage.getItem(LS_API_KEY) || ""; }
@@ -349,18 +364,22 @@
   }
   function saveTracked() { localStorage.setItem(LS_TRACKED, String(trackedTotal)); }
 
-  // Anti-capitalist commentary toggle — defaults on (matches current behavior)
-  // for anyone who already has the app installed and never sees this setting.
-  function loadSnarkMode() {
-    const v = localStorage.getItem(LS_SNARK);
-    return v === null ? true : v === "1";
+  // Reply personality: plain / anti-capitalist / bored British woman.
+  // Migrates the old boolean snark toggle (defaulted on) into "anticap" so
+  // nobody who already had it enabled silently loses their setting.
+  function loadPersona() {
+    const v = localStorage.getItem(LS_PERSONA);
+    if (v && PERSONAS.includes(v)) return v;
+    const legacy = localStorage.getItem(LS_SNARK);
+    if (legacy !== null) return legacy === "1" ? "anticap" : "plain";
+    return "anticap"; // first-ever run default, matches original behavior
   }
-  function saveSnarkMode(on) { localStorage.setItem(LS_SNARK, on ? "1" : "0"); }
+  function savePersona(p) { localStorage.setItem(LS_PERSONA, p); }
 
   let items = loadItems(); // [{id, text, done}]
   let nextId = items.reduce((m, it) => Math.max(m, it.id || 0), 0) + 1;
   let trackedTotal = loadTracked(); // lifetime count of items ever added, just for the footer flourish
-  let snarkMode = loadSnarkMode();
+  let persona = loadPersona();
 
   // ---------- DOM ----------
   const el = (id) => document.getElementById(id);
@@ -372,7 +391,8 @@
   const apiKeyInput = el("apiKeyInput");
   const saveKeyBtn = el("saveKeyBtn");
   const clearKeyBtn = el("clearKeyBtn");
-  const snarkToggle = el("snarkToggle");
+  const personaGroup = el("personaGroup");
+  const personaBtns = Array.from(personaGroup.querySelectorAll(".persona-btn"));
   const micBtn = el("micBtn");
   const micRing = el("micRing");
   const micHint = el("micHint");
@@ -415,13 +435,21 @@
     refreshSettingsVisibility();
   });
 
-  snarkToggle.checked = snarkMode;
-  snarkToggle.addEventListener("change", () => {
-    snarkMode = snarkToggle.checked;
-    saveSnarkMode(snarkMode);
-    // The personality is set once per session via systemInstruction, not
-    // re-sent per turn — so force a fresh connection now, otherwise the old
-    // personality keeps talking until the session happens to drop on its own.
+  function refreshPersonaButtons() {
+    personaBtns.forEach((btn) => btn.classList.toggle("active", btn.dataset.persona === persona));
+  }
+  refreshPersonaButtons();
+
+  personaGroup.addEventListener("click", (e) => {
+    const btn = e.target.closest(".persona-btn");
+    if (!btn || btn.dataset.persona === persona) return;
+    persona = btn.dataset.persona;
+    savePersona(persona);
+    refreshPersonaButtons();
+    // Personality (and voice) is set once per session via systemInstruction/
+    // speechConfig, not re-sent per turn — force a fresh connection now,
+    // otherwise the old personality keeps talking until the session drops
+    // on its own.
     if (ws || wsReady) {
       if (live) { stopMic(); live = false; }
       disconnect();
@@ -573,8 +601,27 @@
     "is enough, with commentary only if it fits naturally. Never refuse to add or remove an item because of " +
     "your politics — you still do the job, you just narrate it in character.";
 
+  const BORED_BRIT_STYLE =
+    "Your personality is a bored, sarcastic Englishwoman with a dry, deadpan wit — someone who has seen it " +
+    "all and is thoroughly unimpressed by any of it. Speak with a British English accent and delivery: flat, " +
+    "unbothered, faintly exasperated, like this is beneath you. Always actually perform the requested action " +
+    "via the tools first — the commentary is on top of the action, never instead of it. For every add_items " +
+    "or remove_items call, first confirm briefly what changed, then add one short, dry, sarcastic remark " +
+    "about the specific item(s) — deadpan understatement, mild disdain, or a weary aside, never enthusiasm. " +
+    "Keep the whole reply to two sentences at most. For get_list or clear_list, one sentence is enough, " +
+    "delivered with the same weary, unimpressed tone. Never refuse to add or remove an item because you find " +
+    "it beneath you — you still do the job, you just sound thoroughly over it while doing so.";
+
+  // Native audio output models pick their own language/accent automatically
+  // and don't expose a language code — a prebuilt voice plus a written accent
+  // direction in the system instruction is the only lever available, so the
+  // British accent is a best-effort request rather than a guarantee.
+  const PERSONA_VOICE = { bored_brit: "Umbriel" };
+
   function getSystemInstruction() {
-    return BASE_INSTRUCTION + (snarkMode ? SNARK_STYLE : PLAIN_STYLE);
+    if (persona === "anticap") return BASE_INSTRUCTION + SNARK_STYLE;
+    if (persona === "bored_brit") return BASE_INSTRUCTION + BORED_BRIT_STYLE;
+    return BASE_INSTRUCTION + PLAIN_STYLE;
   }
 
   const TOOLS = [
@@ -662,10 +709,15 @@
       ws.onopen = () => {
         // First message must have exactly one top-level field: "setup".
         // responseModalities lives inside generationConfig, not at the top level.
+        const generationConfig = { responseModalities: ["AUDIO"] };
+        const voiceName = PERSONA_VOICE[persona];
+        if (voiceName) {
+          generationConfig.speechConfig = { voiceConfig: { prebuiltVoiceConfig: { voiceName } } };
+        }
         const setupMessage = {
           setup: {
             model: "models/" + MODEL,
-            generationConfig: { responseModalities: ["AUDIO"] },
+            generationConfig,
             systemInstruction: { parts: [{ text: getSystemInstruction() }] },
             tools: TOOLS,
             inputAudioTranscription: {},
