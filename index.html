@@ -392,6 +392,7 @@
   let wsReady = false;
   let intentionalClose = false;
   let intentionalCloseStatus = null;
+  let onSetupComplete = null;
 
   function wsUrl(apiKey) {
     return "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" + encodeURIComponent(apiKey);
@@ -428,22 +429,31 @@
       let settled = false;
       setStatus("connecting…", "");
       ws = new WebSocket(wsUrl(key));
+      // The server only marks the session ready after it sends back
+      // `setupComplete` — we must wait for that, not just for the socket to open.
+      onSetupComplete = () => {
+        if (!settled) {
+          settled = true;
+          wsReady = true;
+          setStatus("connected", "connected");
+          resolve();
+        }
+      };
       ws.onopen = () => {
-        const configMessage = {
-          config: {
+        // First message must have exactly one top-level field: "setup".
+        // responseModalities lives inside generationConfig, not at the top level.
+        const setupMessage = {
+          setup: {
             model: "models/" + MODEL,
-            responseModalities: ["AUDIO"],
+            generationConfig: { responseModalities: ["AUDIO"] },
             systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
             tools: TOOLS,
             inputAudioTranscription: {},
             outputAudioTranscription: {}
           }
         };
-        ws.send(JSON.stringify(configMessage));
-        wsReady = true;
-        settled = true;
-        setStatus("connected", "connected");
-        resolve();
+        ws.send(JSON.stringify(setupMessage));
+        setStatus("finishing setup…", "");
       };
       ws.onmessage = (event) => handleServerMessage(event.data);
       ws.onerror = (e) => {
@@ -453,6 +463,7 @@
       };
       ws.onclose = (event) => {
         wsReady = false;
+        onSetupComplete = null;
         if (intentionalClose) {
           const s = intentionalCloseStatus || { text: "not connected", cls: "" };
           setStatus(s.text, s.cls);
@@ -483,13 +494,20 @@
   async function handleServerMessage(raw) {
     let msg;
     try {
-      msg = typeof raw === "string" ? JSON.parse(raw) : JSON.parse(await raw.text());
+      const text = typeof raw === "string" ? raw : await raw.text();
+      msg = JSON.parse(text);
     } catch (e) { return; }
+
+    if (msg.setupComplete !== undefined) {
+      if (onSetupComplete) { onSetupComplete(); onSetupComplete = null; }
+      return;
+    }
 
     if (msg.error) {
       const m = msg.error.message || JSON.stringify(msg.error);
       logLine("gemini", "[error] " + m);
       setStatus("error: " + m, "error");
+      return;
     }
 
     if (msg.serverContent) {
