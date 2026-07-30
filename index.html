@@ -756,7 +756,9 @@
     if (!live) {
       await startListening();
     } else {
-      disconnect({ text: "not connected", cls: "" });
+      // Just pause the mic — keep the Gemini session open so the next tap
+      // resumes instantly instead of paying for a full reconnect + setup
+      // handshake every time you stop talking.
       stopMic();
       live = false;
     }
