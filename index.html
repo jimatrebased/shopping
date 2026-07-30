@@ -819,6 +819,14 @@
       playCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
       nextPlayTime = playCtx.currentTime;
     }
+    // Mobile browsers start AudioContexts "suspended" unless the create/resume
+    // call happens inside a direct user-gesture handler. Playback is created
+    // lazily when the first reply arrives over the network — which is NOT a
+    // gesture — so without this, Gemini's spoken replies build up silently
+    // and nothing is ever actually heard.
+    if (playCtx.state === "suspended") {
+      playCtx.resume().catch(() => {});
+    }
   }
 
   function queuePcmAudio(base64Data) {
@@ -859,6 +867,11 @@
       settingsPanel.classList.remove("hidden");
       return;
     }
+    // Claim the playback audio system right here, synchronously, inside the
+    // tap itself — this is the one moment that counts as a real user gesture
+    // to the browser. Doing it later (when audio actually arrives) is too
+    // late on mobile and playback stays silently suspended forever.
+    ensurePlayCtx();
     micBtn.disabled = true;
     try {
       if (!ws || !wsReady) await connect();
