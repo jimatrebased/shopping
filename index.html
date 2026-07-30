@@ -100,14 +100,6 @@
   }
   #micHint { font-size: 13px; color: var(--muted); }
 
-  #transcript {
-    max-height: 120px; overflow-y: auto; font-size: 13px; color: var(--muted);
-    line-height: 1.6; display: flex; flex-direction: column; gap: 3px;
-  }
-  #transcript:empty { display: none; }
-  #transcript .you { color: var(--text); }
-  #transcript .gem { color: var(--accent-bright); }
-
   #listSection h2 { font-size: 15px; margin: 0 0 10px; color: var(--muted); font-weight: 600; }
   #addRow { display: flex; gap: 8px; margin-bottom: 12px; }
   #addRow input {
@@ -166,7 +158,6 @@
       <button id="micBtn">&#127908;</button>
       <div id="micHint">Tap to start talking</div>
     </div>
-    <div id="transcript"></div>
   </div>
 
   <div class="card" id="listSection">
@@ -215,7 +206,6 @@
   const clearKeyBtn = el("clearKeyBtn");
   const micBtn = el("micBtn");
   const micHint = el("micHint");
-  const transcriptEl = el("transcript");
   const itemsEl = el("items");
   const emptyMsg = el("emptyMsg");
   const addInput = el("addInput");
@@ -346,14 +336,10 @@
     return items.map((it) => ({ item: it.text, done: !!it.done }));
   }
 
-  // ---------- Transcript ----------
+  // Transcripts still come through from Gemini, just logged quietly rather
+  // than displayed — flip these to a visible line again if that's ever useful.
   function logLine(who, text) {
-    const div = document.createElement("div");
-    div.className = who === "you" ? "you" : "gem";
-    div.textContent = (who === "you" ? "You: " : "Gemini: ") + text;
-    transcriptEl.appendChild(div);
-    transcriptEl.scrollTop = transcriptEl.scrollHeight;
-    while (transcriptEl.childNodes.length > 40) transcriptEl.removeChild(transcriptEl.firstChild);
+    console.log(who === "you" ? "You:" : "Gemini:", text);
   }
 
   // ---------- Gemini Live API ----------
