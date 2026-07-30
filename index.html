@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#1a7f4b" />
+<title>Shopping List (Gemini)</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icon-192.png" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<style>
+  :root {
+    --bg: #0b1f16;
+    --card: #12291d;
+    --accent: #1a7f4b;
+    --accent-bright: #29c26e;
+    --text: #eef6ef;
+    --muted: #8fa89a;
+    --danger: #c24d3d;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  #app {
+    max-width: 480px; margin: 0 auto; min-height: 100dvh;
+    display: flex; flex-direction: column; padding: 16px;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    padding-top: max(16px, env(safe-area-inset-top));
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  #statusPill {
+    font-size: 12px; padding: 4px 10px; border-radius: 999px;
+    background: #2a2a2a; color: var(--muted);
+  }
+  #statusPill.connected { background: #133d24; color: var(--accent-bright); }
+  #statusPill.error { background: #3d1313; color: #f18b7c; }
+  button.icon-btn {
+    background: none; border: none; color: var(--muted); font-size: 18px;
+    cursor: pointer; padding: 6px;
+  }
+  .card {
+    background: var(--card); border-radius: 14px; padding: 14px; margin-bottom: 14px;
+  }
+  #settingsPanel label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  #settingsPanel input[type=text], #settingsPanel input[type=password] {
+    width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #2c4535;
+    background: #0e2418; color: var(--text); font-size: 14px; margin-bottom: 10px;
+  }
+  #settingsPanel .row { display: flex; gap: 8px; }
+  #settingsPanel button {
+    flex: 1; padding: 10px; border-radius: 8px; border: none;
+    background: var(--accent); color: white; font-size: 14px; cursor: pointer;
+  }
+  #settingsPanel small a { color: var(--accent-bright); }
+
+  #micWrap { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 8px 0 18px; }
+  #micBtn {
+    width: 96px; height: 96px; border-radius: 50%; border: none;
+    background: var(--accent); color: white; font-size: 34px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 0 0 rgba(41,194,110,0.5);
+    transition: transform 0.15s ease;
+  }
+  #micBtn.live { background: var(--danger); animation: pulse 1.6s infinite; }
+  #micBtn:disabled { opacity: 0.4; cursor: default; }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(194,77,61,0.5); }
+    70% { box-shadow: 0 0 0 18px rgba(194,77,61,0); }
+    100% { box-shadow: 0 0 0 0 rgba(194,77,61,0); }
+  }
+  #micHint { font-size: 13px; color: var(--muted); }
+
+  #transcript {
+    max-height: 120px; overflow-y: auto; font-size: 13px; color: var(--muted);
+    line-height: 1.5; display: flex; flex-direction: column; gap: 2px;
+  }
+  #transcript .you { color: var(--text); }
+  #transcript .gem { color: var(--accent-bright); }
+
+  #listSection h2 { font-size: 15px; margin: 0 0 10px; color: var(--muted); font-weight: 600; }
+  #addRow { display: flex; gap: 8px; margin-bottom: 12px; }
+  #addRow input {
+    flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #2c4535;
+    background: #0e2418; color: var(--text); font-size: 14px;
+  }
+  #addRow button {
+    padding: 10px 14px; border-radius: 8px; border: none;
+    background: var(--accent); color: white; cursor: pointer;
+  }
+  ul#items { list-style: none; margin: 0; padding: 0; }
+  ul#items li {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 4px; border-bottom: 1px solid #1e3a2a;
+  }
+  ul#items li input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent-bright); }
+  ul#items li span { flex: 1; font-size: 15px; }
+  ul#items li.done span { text-decoration: line-through; color: var(--muted); }
+  ul#items li button {
+    background: none; border: none; color: var(--muted); font-size: 16px; cursor: pointer;
+  }
+  #emptyMsg { color: var(--muted); font-size: 13px; text-align: center; padding: 12px 0; }
+  #footerActions { display: flex; justify-content: flex-end; margin-top: 6px; }
+  #footerActions button {
+    background: none; border: none; color: var(--muted); font-size: 12px;
+    text-decoration: underline; cursor: pointer;
+  }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Shopping List</h1>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <span id="statusPill">not connected</span>
+      <button class="icon-btn" id="settingsToggle" title="Settings">&#9881;</button>
+    </div>
+  </header>
+
+  <div class="card" id="settingsPanel">
+    <label for="apiKeyInput">Gemini API key</label>
+    <input type="password" id="apiKeyInput" placeholder="Paste your key from aistudio.google.com/apikey" />
+    <div class="row">
+      <button id="saveKeyBtn">Save</button>
+      <button id="clearKeyBtn" style="background:#3d1313;">Clear</button>
+    </div>
+    <small style="color:var(--muted);">
+      Your key stays on this phone (localStorage) &mdash; it's sent straight to Google, never anywhere else.
+      Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.
+    </small>
+  </div>
+
+  <div class="card">
+    <div id="micWrap">
+      <button id="micBtn">&#127908;</button>
+      <div id="micHint">Tap to start talking</div>
+    </div>
+    <div id="transcript"></div>
+  </div>
+
+  <div class="card" id="listSection">
+    <h2>Your list</h2>
+    <div id="addRow">
+      <input type="text" id="addInput" placeholder="Add an item manually&hellip;" />
+      <button id="addBtn">Add</button>
+    </div>
+    <ul id="items"></ul>
+    <div id="emptyMsg" class="hidden">Nothing on the list yet. Say &ldquo;add milk and eggs&rdquo; or type one above.</div>
+    <div id="footerActions">
+      <button id="clearAllBtn">Clear all</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- Storage ----------
+  const LS_API_KEY = "gemini_shopping_api_key";
+  const LS_LIST = "gemini_shopping_list_items";
+  const MODEL = "gemini-3.1-flash-live-preview";
+
+  function loadKey() { return localStorage.getItem(LS_API_KEY) || ""; }
+  function saveKey(k) { localStorage.setItem(LS_API_KEY, k); }
+  function clearKey() { localStorage.removeItem(LS_API_KEY); }
+
+  function loadItems() {
+    try { return JSON.parse(localStorage.getItem(LS_LIST) || "[]"); }
+    catch (e) { return []; }
+  }
+  function saveItems() { localStorage.setItem(LS_LIST, JSON.stringify(items)); }
+
+  let items = loadItems(); // [{id, text, done}]
+  let nextId = items.reduce((m, it) => Math.max(m, it.id || 0), 0) + 1;
+
+  // ---------- DOM ----------
+  const el = (id) => document.getElementById(id);
+  const statusPill = el("statusPill");
+  const settingsPanel = el("settingsPanel");
+  const settingsToggle = el("settingsToggle");
+  const apiKeyInput = el("apiKeyInput");
+  const saveKeyBtn = el("saveKeyBtn");
+  const clearKeyBtn = el("clearKeyBtn");
+  const micBtn = el("micBtn");
+  const micHint = el("micHint");
+  const transcriptEl = el("transcript");
+  const itemsEl = el("items");
+  const emptyMsg = el("emptyMsg");
+  const addInput = el("addInput");
+  const addBtn = el("addBtn");
+  const clearAllBtn = el("clearAllBtn");
+
+  function setStatus(text, cls) {
+    statusPill.textContent = text;
+    statusPill.className = cls || "";
+  }
+
+  function refreshSettingsVisibility() {
+    settingsPanel.classList.toggle("hidden", !!loadKey());
+  }
+
+  settingsToggle.addEventListener("click", () => {
+    settingsPanel.classList.toggle("hidden");
+  });
+  saveKeyBtn.addEventListener("click", () => {
+    const v = apiKeyInput.value.trim();
+    if (!v) return;
+    saveKey(v);
+    apiKeyInput.value = "";
+    settingsPanel.classList.add("hidden");
+    setStatus("key saved", "");
+  });
+  clearKeyBtn.addEventListener("click", () => {
+    clearKey();
+    disconnect();
+    refreshSettingsVisibility();
+    setStatus("not connected", "");
+  });
+
+  // ---------- List rendering ----------
+  function renderList() {
+    itemsEl.innerHTML = "";
+    emptyMsg.classList.toggle("hidden", items.length > 0);
+    for (const it of items) {
+      const li = document.createElement("li");
+      if (it.done) li.classList.add("done");
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = !!it.done;
+      cb.addEventListener("change", () => {
+        it.done = cb.checked;
+        saveItems();
+        renderList();
+      });
+      const span = document.createElement("span");
+      span.textContent = it.text;
+      const del = document.createElement("button");
+      del.textContent = "✕";
+      del.addEventListener("click", () => {
+        items = items.filter((x) => x.id !== it.id);
+        saveItems();
+        renderList();
+      });
+      li.appendChild(cb);
+      li.appendChild(span);
+      li.appendChild(del);
+      itemsEl.appendChild(li);
+    }
+  }
+  renderList();
+
+  addBtn.addEventListener("click", () => {
+    const v = addInput.value.trim();
+    if (!v) return;
+    addItemsLocal([v]);
+    addInput.value = "";
+  });
+  addInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") addBtn.click();
+  });
+  clearAllBtn.addEventListener("click", () => {
+    items = [];
+    saveItems();
+    renderList();
+  });
+
+  // ---------- Functions the model can call ----------
+  function findIndexByName(name) {
+    const needle = name.trim().toLowerCase();
+    return items.findIndex(
+      (it) => it.text.toLowerCase() === needle || it.text.toLowerCase().includes(needle) || needle.includes(it.text.toLowerCase())
+    );
+  }
+
+  function addItemsLocal(names) {
+    const added = [];
+    for (const raw of names) {
+      const name = String(raw).trim();
+      if (!name) continue;
+      if (findIndexByName(name) === -1) {
+        items.push({ id: nextId++, text: name, done: false });
+        added.push(name);
+      }
+    }
+    saveItems();
+    renderList();
+    return added;
+  }
+
+  function removeItemsLocal(names) {
+    const removed = [];
+    for (const raw of names) {
+      const idx = findIndexByName(String(raw));
+      if (idx !== -1) {
+        removed.push(items[idx].text);
+        items.splice(idx, 1);
+      }
+    }
+    saveItems();
+    renderList();
+    return removed;
+  }
+
+  function clearListLocal() {
+    const count = items.length;
+    items = [];
+    saveItems();
+    renderList();
+    return count;
+  }
+
+  function getListLocal() {
+    return items.map((it) => ({ item: it.text, done: !!it.done }));
+  }
+
+  // ---------- Transcript ----------
+  function logLine(who, text) {
+    const div = document.createElement("div");
+    div.className = who === "you" ? "you" : "gem";
+    div.textContent = (who === "you" ? "You: " : "Gemini: ") + text;
+    transcriptEl.appendChild(div);
+    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+    while (transcriptEl.childNodes.length > 40) transcriptEl.removeChild(transcriptEl.firstChild);
+  }
+
+  // ---------- Gemini Live API ----------
+  const SYSTEM_INSTRUCTION =
+    "You are a voice-controlled shopping list assistant running inside a single-purpose app. " +
+    "The app has one real shopping list, which you access ONLY through the add_items, remove_items, " +
+    "clear_list and get_list tools — never guess or rely on memory for what's on the list, always call " +
+    "get_list if you need to check it first. " +
+    "Style rules, follow these strictly: do not apologise for anything, ever. Do not comment on the user's " +
+    "mood, tone, stress, or emotional state. Do not use filler phrases like 'I understand', 'no problem', " +
+    "'great question', or 'certainly'. Keep every spoken reply to one short sentence confirming what happened, " +
+    "for example 'Added milk and eggs.' or 'List: milk, eggs, bread.' or 'Removed eggs.'";
+
+  const TOOLS = [
+    {
+      functionDeclarations: [
+        {
+          name: "add_items",
+          description: "Add one or more items to the user's shopping list. Skip items already present.",
+          parameters: {
+            type: "OBJECT",
+            properties: {
+              items: { type: "ARRAY", items: { type: "STRING" }, description: "Item names to add" }
+            },
+            required: ["items"]
+          }
+        },
+        {
+          name: "remove_items",
+          description: "Remove one or more items from the shopping list by name.",
+          parameters: {
+            type: "OBJECT",
+            properties: {
+              items: { type: "ARRAY", items: { type: "STRING" }, description: "Item names to remove" }
+            },
+            required: ["items"]
+          }
+        },
+        {
+          name: "clear_list",
+          description: "Remove every item from the shopping list.",
+          parameters: { type: "OBJECT", properties: {} }
+        },
+        {
+          name: "get_list",
+          description: "Get everything currently on the shopping list. Always call this before answering questions about the list's contents, or before reading it back.",
+          parameters: { type: "OBJECT", properties: {} }
+        }
+      ]
+    }
+  ];
+
+  let ws = null;
+  let wsReady = false;
+
+  function wsUrl(apiKey) {
+    return "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" + encodeURIComponent(apiKey);
+  }
+
+  function connect() {
+    const key = loadKey();
+    if (!key) {
+      settingsPanel.classList.remove("hidden");
+      setStatus("add an API key", "error");
+      return Promise.reject(new Error("no key"));
+    }
+    return new Promise((resolve, reject) => {
+      setStatus("connecting…", "");
+      ws = new WebSocket(wsUrl(key));
+      ws.onopen = () => {
+        const configMessage = {
+          config: {
+            model: "models/" + MODEL,
+            responseModalities: ["AUDIO"],
+            systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
+            tools: TOOLS,
+            inputAudioTranscription: {},
+            outputAudioTranscription: {}
+          }
+        };
+        ws.send(JSON.stringify(configMessage));
+        wsReady = true;
+        setStatus("connected", "connected");
+        resolve();
+      };
+      ws.onmessage = (event) => handleServerMessage(event.data);
+      ws.onerror = () => {
+        setStatus("connection error", "error");
+        reject(new Error("ws error"));
+      };
+      ws.onclose = () => {
+        wsReady = false;
+        setStatus("not connected", "");
+        stopMic();
+      };
+    });
+  }
+
+  function disconnect() {
+    if (ws) { try { ws.close(); } catch (e) {} }
+    ws = null;
+    wsReady = false;
+  }
+
+  async function handleServerMessage(raw) {
+    let msg;
+    try {
+      msg = typeof raw === "string" ? JSON.parse(raw) : JSON.parse(await raw.text());
+    } catch (e) { return; }
+
+    if (msg.serverContent) {
+      const sc = msg.serverContent;
+      if (sc.interrupted) stopPlayback();
+      if (sc.modelTurn && sc.modelTurn.parts) {
+        for (const part of sc.modelTurn.parts) {
+          if (part.inlineData && part.inlineData.data) {
+            queuePcmAudio(part.inlineData.data);
+          }
+        }
+      }
+      if (sc.inputTranscription && sc.inputTranscription.text) {
+        logLine("you", sc.inputTranscription.text);
+      }
+      if (sc.outputTranscription && sc.outputTranscription.text) {
+        logLine("gemini", sc.outputTranscription.text);
+      }
+    }
+
+    if (msg.toolCall && msg.toolCall.functionCalls) {
+      const functionResponses = [];
+      for (const fc of msg.toolCall.functionCalls) {
+        let response;
+        try {
+          const args = fc.args || {};
+          switch (fc.name) {
+            case "add_items":
+              response = { added: addItemsLocal(args.items || []) };
+              break;
+            case "remove_items":
+              response = { removed: removeItemsLocal(args.items || []) };
+              break;
+            case "clear_list":
+              response = { cleared: clearListLocal() };
+              break;
+            case "get_list":
+              response = { list: getListLocal() };
+              break;
+            default:
+              response = { error: "unknown function " + fc.name };
+          }
+        } catch (e) {
+          response = { error: String(e) };
+        }
+        functionResponses.push({ id: fc.id, name: fc.name, response });
+      }
+      if (ws && wsReady) {
+        ws.send(JSON.stringify({ toolResponse: { functionResponses } }));
+      }
+    }
+  }
+
+  // ---------- Audio: capture (mic -> 16kHz PCM16 -> WebSocket) ----------
+  let captureCtx = null;
+  let micStream = null;
+  let micSource = null;
+  let micProcessor = null;
+
+  function downsampleTo16k(float32, inRate) {
+    if (inRate === 16000) return float32;
+    const ratio = inRate / 16000;
+    const outLength = Math.floor(float32.length / ratio);
+    const out = new Float32Array(outLength);
+    for (let i = 0; i < outLength; i++) {
+      out[i] = float32[Math.floor(i * ratio)];
+    }
+    return out;
+  }
+
+  function floatTo16BitPCM(float32) {
+    const out = new Int16Array(float32.length);
+    for (let i = 0; i < float32.length; i++) {
+      let s = Math.max(-1, Math.min(1, float32[i]));
+      out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+    }
+    return out;
+  }
+
+  function base64FromInt16(int16) {
+    const bytes = new Uint8Array(int16.buffer);
+    let binary = "";
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  }
+
+  async function startMic() {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+    captureCtx = new (window.AudioContext || window.webkitAudioContext)();
+    micSource = captureCtx.createMediaStreamSource(micStream);
+    micProcessor = captureCtx.createScriptProcessor(4096, 1, 1);
+    const silentGain = captureCtx.createGain();
+    silentGain.gain.value = 0;
+
+    micProcessor.onaudioprocess = (e) => {
+      if (!ws || !wsReady) return;
+      const input = e.inputBuffer.getChannelData(0);
+      const down = downsampleTo16k(input, captureCtx.sampleRate);
+      const pcm16 = floatTo16BitPCM(down);
+      const b64 = base64FromInt16(pcm16);
+      ws.send(JSON.stringify({
+        realtimeInput: { audio: { data: b64, mimeType: "audio/pcm;rate=16000" } }
+      }));
+    };
+
+    micSource.connect(micProcessor);
+    micProcessor.connect(silentGain);
+    silentGain.connect(captureCtx.destination);
+  }
+
+  function stopMic() {
+    if (micProcessor) { try { micProcessor.disconnect(); } catch (e) {} micProcessor = null; }
+    if (micSource) { try { micSource.disconnect(); } catch (e) {} micSource = null; }
+    if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
+    if (captureCtx) { try { captureCtx.close(); } catch (e) {} captureCtx = null; }
+    micBtn.classList.remove("live");
+    micHint.textContent = "Tap to start talking";
+  }
+
+  // ---------- Audio: playback (WebSocket -> 24kHz PCM16 -> speaker) ----------
+  let playCtx = null;
+  let nextPlayTime = 0;
+  let activeSources = [];
+
+  function ensurePlayCtx() {
+    if (!playCtx) {
+      playCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+      nextPlayTime = playCtx.currentTime;
+    }
+  }
+
+  function queuePcmAudio(base64Data) {
+    ensurePlayCtx();
+    const binary = atob(base64Data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const int16 = new Int16Array(bytes.buffer);
+    const float32 = new Float32Array(int16.length);
+    for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 0x8000;
+
+    const buffer = playCtx.createBuffer(1, float32.length, 24000);
+    buffer.copyToChannel(float32, 0);
+    const source = playCtx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(playCtx.destination);
+
+    const startAt = Math.max(nextPlayTime, playCtx.currentTime);
+    source.start(startAt);
+    nextPlayTime = startAt + buffer.duration;
+    activeSources.push(source);
+    source.onended = () => { activeSources = activeSources.filter((s) => s !== source); };
+  }
+
+  function stopPlayback() {
+    for (const s of activeSources) { try { s.stop(); } catch (e) {} }
+    activeSources = [];
+    if (playCtx) nextPlayTime = playCtx.currentTime;
+  }
+
+  // ---------- Mic button ----------
+  let live = false;
+  micBtn.addEventListener("click", async () => {
+    if (!loadKey()) {
+      settingsPanel.classList.remove("hidden");
+      return;
+    }
+    if (!live) {
+      micBtn.disabled = true;
+      try {
+        if (!ws || !wsReady) await connect();
+        await startMic();
+        live = true;
+        micBtn.classList.add("live");
+        micHint.textContent = "Listening… tap to stop";
+      } catch (e) {
+        setStatus("mic/connect failed", "error");
+        console.error(e);
+      } finally {
+        micBtn.disabled = false;
+      }
+    } else {
+      stopMic();
+      live = false;
+    }
+  });
+
+  // ---------- PWA install / service worker ----------
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    });
+  }
+
+  refreshSettingsVisibility();
+})();
+</script>
+</body>
+</html>
