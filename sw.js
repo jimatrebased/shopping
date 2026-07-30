@@ -1,7 +1,8 @@
-// Minimal service worker: caches the app shell so the icon/launch screen
-// works offline. Actual Gemini voice features always need a live network
-// connection (it's a real-time WebSocket to Google's servers).
-const CACHE_NAME = "shopping-list-shell-v1";
+// Service worker: keeps the app installable/launchable offline, but always
+// prefers a fresh copy from the network so pushed updates actually reach the
+// installed home-screen app instead of getting stuck on whatever was cached
+// at install time. Cache is only a fallback for when there's no network.
+const CACHE_NAME = "shopping-list-shell-v2";
 const SHELL_FILES = [
   "./index.html",
   "./manifest.json",
@@ -28,10 +29,14 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  // Only handle same-origin GET requests for the shell files.
-  // Never intercept the Gemini WebSocket connection.
   if (event.request.method !== "GET") return;
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
+    fetch(event.request)
+      .then((networkResponse) => {
+        const copy = networkResponse.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        return networkResponse;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
