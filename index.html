@@ -53,10 +53,14 @@
     width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #2c4535;
     background: #0e2418; color: var(--text); font-size: 14px; margin-bottom: 10px;
   }
-  #settingsPanel .row { display: flex; gap: 8px; }
-  #settingsPanel button {
+  #settingsPanel .row { display: flex; align-items: center; gap: 8px; }
+  #settingsPanel button#saveKeyBtn {
     flex: 1; padding: 10px; border-radius: 8px; border: none;
     background: var(--accent); color: white; font-size: 14px; cursor: pointer;
+  }
+  #settingsPanel button#clearKeyBtn {
+    padding: 10px 12px; border-radius: 8px; border: 1px solid #3d2a2a;
+    background: none; color: var(--muted); font-size: 12px; cursor: pointer;
   }
   #settingsPanel small a { color: var(--accent-bright); }
 
@@ -129,7 +133,7 @@
     <input type="password" id="apiKeyInput" placeholder="Paste your key from aistudio.google.com/apikey" />
     <div class="row">
       <button id="saveKeyBtn">Save</button>
-      <button id="clearKeyBtn" style="background:#3d1313;">Clear</button>
+      <button id="clearKeyBtn" title="Clear saved key">Clear key</button>
     </div>
     <small style="color:var(--muted);">
       Your key stays on this phone (localStorage) &mdash; it's sent straight to Google, never anywhere else.
@@ -227,6 +231,7 @@
     }
   });
   clearKeyBtn.addEventListener("click", () => {
+    if (!confirm("Clear your saved Gemini API key from this phone?")) return;
     clearKey();
     disconnect({ text: "not connected", cls: "" });
     refreshSettingsVisibility();
@@ -393,17 +398,31 @@
   let intentionalClose = false;
   let intentionalCloseStatus = null;
   let onSetupComplete = null;
+  // Once a session has fully connected once, the key is proven good — any
+  // later drop is not a key problem, and the message shown must say so.
+  let hasConnectedOnce = false;
 
   function wsUrl(apiKey) {
     return "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" + encodeURIComponent(apiKey);
   }
 
   // Turns a raw WebSocket close code into something a non-developer can act on.
-  // Google's servers reject a bad/unauthorized API key by failing the connection
-  // outright, which browsers surface as a generic 1006 with no reason text —
-  // that's the single most likely cause if this fires right after saving a key.
+  // A close that happens before any session ever fully connected really is
+  // most likely a bad/unauthorized key. A close that happens after a session
+  // already connected fine is something else entirely (session time limit,
+  // network blip) — the key is proven to work, so don't blame it.
   function describeClose(code, reason) {
     const r = (reason || "").trim();
+    if (hasConnectedOnce) {
+      switch (code) {
+        case 1000:
+          return "not connected";
+        case 1006:
+          return "connection dropped (1006) — a network blip or Gemini's session time limit, not your key. Tap the mic to reconnect.";
+        default:
+          return "session ended (" + code + ")" + (r ? ": " + r : "") + " — not a key problem, tap the mic to reconnect";
+      }
+    }
     switch (code) {
       case 1000:
         return "not connected";
@@ -435,6 +454,7 @@
         if (!settled) {
           settled = true;
           wsReady = true;
+          hasConnectedOnce = true;
           setStatus("connected", "connected");
           resolve();
         }
@@ -464,7 +484,9 @@
       ws.onclose = (event) => {
         wsReady = false;
         onSetupComplete = null;
-        if (intentionalClose) {
+        const wasIntentional = intentionalClose;
+        const wasLive = live;
+        if (wasIntentional) {
           const s = intentionalCloseStatus || { text: "not connected", cls: "" };
           setStatus(s.text, s.cls);
           intentionalClose = false;
@@ -484,6 +506,13 @@
         // tap reconnects, instead of the tap thinking it needs to "stop"
         // something that already stopped.
         live = false;
+        // If you were actively talking when it dropped, try once to pick
+        // the conversation back up automatically instead of leaving you to
+        // notice and re-tap the mic yourself.
+        if (!wasIntentional && wasLive) {
+          logLine("gemini", "[session] Reconnecting automatically…");
+          setTimeout(() => { startListening(); }, 1200);
+        }
       };
     });
   }
@@ -581,13 +610,20 @@
   let micSource = null;
   let micProcessor = null;
 
+  // Linear-interpolation resample rather than nearest-neighbor decimation —
+  // decimation aliases high frequencies into the audible speech band and can
+  // measurably hurt how well Gemini transcribes what you said.
   function downsampleTo16k(float32, inRate) {
     if (inRate === 16000) return float32;
     const ratio = inRate / 16000;
     const outLength = Math.floor(float32.length / ratio);
     const out = new Float32Array(outLength);
     for (let i = 0; i < outLength; i++) {
-      out[i] = float32[Math.floor(i * ratio)];
+      const srcPos = i * ratio;
+      const idx0 = Math.floor(srcPos);
+      const idx1 = Math.min(idx0 + 1, float32.length - 1);
+      const frac = srcPos - idx0;
+      out[i] = float32[idx0] * (1 - frac) + float32[idx1] * frac;
     }
     return out;
   }
@@ -683,32 +719,44 @@
 
   // ---------- Mic button ----------
   let live = false;
+
+  // Shared by the mic button and by the automatic-reconnect path after an
+  // unexpected drop, so both go through identical connect+listen logic.
+  async function startListening() {
+    if (!loadKey()) {
+      settingsPanel.classList.remove("hidden");
+      return;
+    }
+    micBtn.disabled = true;
+    try {
+      if (!ws || !wsReady) await connect();
+      try {
+        await startMic();
+      } catch (micErr) {
+        setStatus("microphone permission denied", "error");
+        logLine("gemini", "[error] " + micErr.message);
+        throw micErr;
+      }
+      live = true;
+      micBtn.classList.add("live");
+      micHint.textContent = "Listening… tap to stop";
+    } catch (e) {
+      // connect() failures already set a specific status + transcript line
+      console.error(e);
+    } finally {
+      micBtn.disabled = false;
+    }
+  }
+
   micBtn.addEventListener("click", async () => {
     if (!loadKey()) {
       settingsPanel.classList.remove("hidden");
       return;
     }
     if (!live) {
-      micBtn.disabled = true;
-      try {
-        if (!ws || !wsReady) await connect();
-        try {
-          await startMic();
-        } catch (micErr) {
-          setStatus("microphone permission denied", "error");
-          logLine("gemini", "[error] " + micErr.message);
-          throw micErr;
-        }
-        live = true;
-        micBtn.classList.add("live");
-        micHint.textContent = "Listening… tap to stop";
-      } catch (e) {
-        // connect() failures already set a specific status + transcript line
-        console.error(e);
-      } finally {
-        micBtn.disabled = false;
-      }
+      await startListening();
     } else {
+      disconnect({ text: "not connected", cls: "" });
       stopMic();
       live = false;
     }
@@ -722,6 +770,15 @@
   }
 
   refreshSettingsVisibility();
+
+  // Ask Android to keep this site's storage out of automatic eviction under
+  // storage pressure — a plausible reason the key could go missing on its own.
+  if (navigator.storage && navigator.storage.persist) {
+    navigator.storage.persist().then((granted) => {
+      logLine("gemini", "[info] persistent storage " + (granted ? "granted" : "not granted"));
+    }).catch(() => {});
+  }
+  logLine("gemini", loadKey() ? "[info] Saved API key found on launch." : "[info] No saved API key found on launch.");
 })();
 </script>
 </body>
