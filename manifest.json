@@ -1,13 +1,13 @@
 {
-  "name": "Shopping List (Gemini)",
-  "short_name": "ShopList",
+  "name": "happy shopper",
+  "short_name": "HappyShop",
   "description": "Voice-controlled shopping list powered by the Gemini Live API",
   "id": "./index.html",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#0b1f16",
-  "theme_color": "#1a7f4b",
+  "background_color": "#fb0f7f",
+  "theme_color": "#fb0f7f",
   "orientation": "portrait",
   "icons": [
     {

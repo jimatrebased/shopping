@@ -3,174 +3,297 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="theme-color" content="#1a7f4b" />
-<title>Shopping List (Gemini)</title>
+<meta name="theme-color" content="#fb0f7f" />
+<title>happy shopper</title>
 <link rel="manifest" href="manifest.json" />
 <link rel="icon" href="icon-192.png" />
 <link rel="apple-touch-icon" href="icon-192.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --bg: #0b1f16;
-    --card: #12291d;
-    --accent: #1a7f4b;
-    --accent-bright: #29c26e;
-    --text: #eef6ef;
-    --muted: #8fa89a;
-    --danger: #c24d3d;
+    --pink: #fb0f7f;
+    --yellow: #ffe500;
+    --maroon: #3d0022;
+    --maroon-mid: #c00060;
+    --white: #ffffff;
   }
   * { box-sizing: border-box; }
   html, body {
-    margin: 0; padding: 0; height: 100%;
-    background: var(--bg); color: var(--text);
-    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    margin: 0; padding: 0; min-height: 100%;
+    background: var(--pink); color: var(--white);
+    font-family: 'Fredoka', Arial, sans-serif;
   }
-  #app {
-    max-width: 480px; margin: 0 auto; min-height: 100dvh;
-    display: flex; flex-direction: column; padding: 16px;
-    padding-bottom: max(16px, env(safe-area-inset-bottom));
-    padding-top: max(16px, env(safe-area-inset-top));
-  }
-  header {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 12px;
-  }
-  header h1 {
-    font-size: 19px; margin: 0; font-weight: 700; letter-spacing: -0.01em;
-  }
-  .status-dot {
-    width: 9px; height: 9px; border-radius: 50%; display: inline-block;
-    background: #3a4d43; transition: background 0.25s ease, box-shadow 0.25s ease;
-  }
-  .status-dot.connecting {
-    background: #d9a441; animation: dotpulse 1s ease-in-out infinite;
-  }
-  .status-dot.connected {
-    background: var(--accent-bright); box-shadow: 0 0 8px rgba(41,194,110,0.65);
-  }
-  @keyframes dotpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
-  button.icon-btn {
-    background: none; border: none; color: var(--muted); font-size: 18px;
-    cursor: pointer; padding: 6px; border-radius: 8px; transition: background 0.15s ease;
-  }
-  button.icon-btn:active { background: rgba(255,255,255,0.06); }
-  .card {
-    background: var(--card); border-radius: 16px; padding: 16px; margin-bottom: 14px;
-    border: 1px solid rgba(255,255,255,0.04);
-    box-shadow: 0 2px 10px rgba(0,0,0,0.22);
-  }
-  #settingsPanel label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
-  #settingsPanel input[type=text], #settingsPanel input[type=password] {
-    width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #2c4535;
-    background: #0e2418; color: var(--text); font-size: 14px; margin-bottom: 10px;
-    transition: border-color 0.15s ease;
-  }
-  #settingsPanel input:focus {
-    outline: none; border-color: var(--accent-bright);
-  }
-  #settingsPanel .row { display: flex; align-items: center; gap: 8px; }
-  #settingsPanel button#saveKeyBtn {
-    flex: 1; padding: 10px; border-radius: 8px; border: none;
-    background: var(--accent); color: white; font-size: 14px; cursor: pointer;
-  }
-  #settingsPanel button#clearKeyBtn {
-    padding: 10px 12px; border-radius: 8px; border: 1px solid #3d2a2a;
-    background: none; color: var(--muted); font-size: 12px; cursor: pointer;
-  }
-  #settingsPanel small a { color: var(--accent-bright); }
+  ::selection { background: var(--yellow); color: var(--maroon); }
+  a { color: var(--yellow); }
+  a:hover { color: var(--white); }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .hidden { display: none !important; }
 
-  #micWrap { display: flex; flex-direction: column; align-items: center; gap: 12px; margin: 6px 0 18px; }
+  #app {
+    max-width: 480px; margin: 0 auto; min-height: 100dvh; position: relative;
+    overflow: hidden;
+    padding: max(20px, env(safe-area-inset-top)) 20px max(0px, env(safe-area-inset-bottom));
+  }
+
+  .stripe-a {
+    position: absolute; bottom: -40px; right: -120px; width: 420px; height: 14px;
+    background: var(--yellow); transform: rotate(-38deg); pointer-events: none;
+  }
+  .stripe-b {
+    position: absolute; bottom: -66px; right: -130px; width: 420px; height: 7px;
+    background: var(--maroon-mid); transform: rotate(-38deg); pointer-events: none;
+  }
+
+  .eyebrow { display: flex; align-items: center; gap: 8px; position: relative; z-index: 1; }
+  .eyebrow-dot { width: 9px; height: 9px; background: var(--yellow); flex: none; }
+  .eyebrow-label { font-size: 9px; letter-spacing: 0.16em; font-weight: 700; }
+  .dotted-line { flex: 1; border-top: 1px dotted rgba(255,255,255,0.45); }
+  .eyebrow-rev { font-size: 9px; letter-spacing: 0.12em; font-weight: 700; color: var(--yellow); }
+
+  .hero { margin-top: 26px; position: relative; z-index: 1; }
+  .hero-tag { font-size: 9px; letter-spacing: 0.2em; font-weight: 700; opacity: 0.85; margin-bottom: 8px; }
+  .hero h1 {
+    font-weight: 700; font-size: 58px; line-height: 0.82; letter-spacing: -0.045em;
+    margin: 0; color: var(--white); text-shadow: 0 7px 0 var(--maroon-mid);
+  }
+
+  .sub-row {
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 14px;
+    margin-top: 22px; position: relative; z-index: 1;
+  }
+  .sub-copy { font-size: 9px; line-height: 1.7; letter-spacing: 0.06em; opacity: 0.85; max-width: 220px; }
+  .status-cluster { display: flex; align-items: center; gap: 9px; flex: none; }
+  .status-pill {
+    display: flex; align-items: center; gap: 7px; border: 2px solid rgba(255,255,255,0.6);
+    border-radius: 999px; padding: 5px 12px;
+  }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: rgba(255,255,255,0.5); }
+  .status-dot.connecting { background: var(--yellow); animation: blink 0.9s ease-in-out infinite; }
+  .status-dot.connected { background: var(--yellow); }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+  .status-label { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; }
+  .icon-btn {
+    width: 28px; height: 28px; min-width: 28px; border: none; border-radius: 50%;
+    background: var(--white); cursor: pointer; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 3px; padding: 0;
+  }
+  .icon-btn span { width: 14px; height: 3px; border-radius: 2px; background: var(--pink); display: block; }
+  .icon-btn span:nth-child(2) { width: 9px; }
+
+  .settings-panel {
+    border: 2px solid var(--white); border-radius: 22px; padding: 18px; margin-top: 24px;
+    position: relative; z-index: 1;
+  }
+  .settings-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .settings-head .mono { font-size: 10px; letter-spacing: 0.16em; font-weight: 700; color: var(--yellow); }
+  .close-btn {
+    background: none; border: none; color: var(--white); font-size: 13px; font-weight: 700;
+    cursor: pointer; padding: 2px 4px; font-family: 'JetBrains Mono', monospace;
+  }
+  .settings-panel input[type=password] {
+    width: 100%; padding: 13px 16px; border: 2px solid rgba(255,255,255,0.55); border-radius: 999px;
+    background: transparent; color: var(--white); font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; margin-bottom: 12px; transition: border-color 0.15s ease;
+  }
+  .settings-panel input::placeholder { color: #ffc4e0; opacity: 1; }
+  .settings-panel input:focus { outline: none; border-color: var(--yellow); }
+  .settings-row { display: flex; gap: 8px; }
+  .pill-btn-solid {
+    flex: 1; padding: 13px; border: none; border-radius: 999px; background: var(--white);
+    color: var(--pink); font-family: 'Fredoka', sans-serif; font-weight: 600; font-size: 15px; cursor: pointer;
+  }
+  .pill-btn-outline {
+    padding: 13px 18px; border: 2px solid rgba(255,255,255,0.55); border-radius: 999px;
+    background: transparent; color: var(--white); font-family: 'Fredoka', sans-serif;
+    font-weight: 500; font-size: 14px; cursor: pointer;
+  }
+  .settings-note { font-size: 9px; line-height: 1.6; opacity: 0.8; margin-top: 14px; }
+
+  .mic-section {
+    position: relative; display: flex; flex-direction: column; align-items: center; gap: 16px;
+    padding: 34px 0 30px; z-index: 1;
+  }
+  .mic-side-label {
+    position: absolute; left: -16px; top: 50%; transform: rotate(-90deg) translateY(-50%);
+    transform-origin: left top; font-size: 9px; letter-spacing: 0.22em; font-weight: 700;
+    opacity: 0.8; white-space: nowrap;
+  }
+  .mic-index { position: absolute; right: -4px; top: 22px; font-size: 9px; letter-spacing: 0.14em; font-weight: 700; opacity: 0.75; }
+  .mic-wrap { position: relative; width: 132px; height: 132px; display: flex; align-items: center; justify-content: center; }
+  .mic-ring {
+    position: absolute; inset: 8px; border: 3px solid var(--yellow); border-radius: 50%;
+    animation: pulsering 1.3s ease-out infinite;
+  }
+  @keyframes pulsering { 0% { transform: scale(1); opacity: 0.7; } 100% { transform: scale(1.6); opacity: 0; } }
   #micBtn {
-    width: 96px; height: 96px; border-radius: 50%; border: none;
-    background: linear-gradient(160deg, var(--accent-bright), var(--accent));
-    color: white; font-size: 34px; cursor: pointer;
+    width: 118px; height: 118px; border-radius: 50%; border: none; cursor: pointer;
+    background: var(--white); color: var(--pink);
     display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 4px 16px rgba(26,127,75,0.35);
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    position: relative; z-index: 1; transition: transform 0.15s ease;
   }
   #micBtn:active { transform: scale(0.96); }
-  #micBtn.live {
-    background: linear-gradient(160deg, #d9685a, var(--danger));
-    animation: pulse 1.6s infinite;
-  }
-  #micBtn:disabled { opacity: 0.4; cursor: default; }
-  @keyframes pulse {
-    0% { box-shadow: 0 0 0 0 rgba(194,77,61,0.5); }
-    70% { box-shadow: 0 0 0 18px rgba(194,77,61,0); }
-    100% { box-shadow: 0 0 0 0 rgba(194,77,61,0); }
-  }
-  #micHint { font-size: 13px; color: var(--muted); }
+  #micBtn.live { background: var(--yellow); color: var(--maroon); }
+  #micBtn:disabled { opacity: 0.5; }
+  #micBtn svg { width: 42px; height: 42px; }
+  #micHint { font-weight: 500; font-size: 16px; }
+  #micHint.live { color: var(--yellow); }
 
-  #listSection h2 { font-size: 15px; margin: 0 0 10px; color: var(--muted); font-weight: 600; }
-  #addRow { display: flex; gap: 8px; margin-bottom: 12px; }
-  #addRow input {
-    flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #2c4535;
-    background: #0e2418; color: var(--text); font-size: 14px;
+  .list-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    border-top: 2px solid rgba(255,255,255,0.35); padding-top: 16px; position: relative; z-index: 1;
   }
-  #addRow button {
-    padding: 10px 14px; border-radius: 8px; border: none;
-    background: var(--accent); color: white; cursor: pointer;
+  .list-head h2 { font-weight: 700; font-size: 30px; line-height: 1; margin: 0; letter-spacing: -0.03em; }
+  .count-badge {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.1em; background: var(--yellow);
+    color: var(--maroon); padding: 5px 11px; border-radius: 999px; white-space: nowrap;
   }
-  ul#items { list-style: none; margin: 0; padding: 0; }
+
+  .add-row { display: flex; gap: 8px; margin-top: 16px; position: relative; z-index: 1; }
+  .add-row input {
+    flex: 1; padding: 13px 18px; border: 2px solid rgba(255,255,255,0.55); border-radius: 999px;
+    background: transparent; color: var(--white); font-family: 'Fredoka', sans-serif; font-size: 15px;
+    transition: border-color 0.15s ease;
+  }
+  .add-row input::placeholder { color: #ffc4e0; opacity: 1; }
+  .add-row input:focus { outline: none; border-color: var(--yellow); }
+  .add-row button {
+    padding: 13px 22px; border: none; border-radius: 999px; background: var(--white);
+    color: var(--pink); font-family: 'Fredoka', sans-serif; font-weight: 600; font-size: 15px; cursor: pointer;
+  }
+
+  ul#items { list-style: none; margin: 18px 0 0; padding: 0; position: relative; z-index: 1; }
   ul#items li {
-    display: flex; align-items: center; gap: 10px;
-    padding: 10px 4px; border-bottom: 1px solid #1e3a2a;
+    display: flex; align-items: center; gap: 13px; padding: 13px 2px;
+    border-bottom: 1px solid rgba(255,255,255,0.28);
   }
-  ul#items li input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent-bright); }
-  ul#items li span { flex: 1; font-size: 15px; }
-  ul#items li.done span { text-decoration: line-through; color: var(--muted); }
-  ul#items li button {
-    background: none; border: none; color: var(--muted); font-size: 16px; cursor: pointer;
+  .check-btn {
+    width: 26px; height: 26px; min-width: 26px; border: 2px solid var(--white); border-radius: 9px;
+    background: transparent; color: var(--maroon); font-size: 13px; font-weight: 700; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; padding: 0;
   }
-  #emptyMsg { color: var(--muted); font-size: 13px; text-align: center; padding: 12px 0; }
-  #footerActions { display: flex; justify-content: flex-end; margin-top: 6px; }
-  #footerActions button {
-    background: none; border: none; color: var(--muted); font-size: 12px;
-    text-decoration: underline; cursor: pointer;
+  .check-btn.done { background: var(--yellow); }
+  .idx-num { font-size: 9px; opacity: 0.55; min-width: 18px; font-weight: 700; }
+  .item-text { flex: 1; font-family: 'Fredoka', sans-serif; font-size: 17px; font-weight: 500; }
+  .item-text.done { text-decoration: line-through; opacity: 0.55; }
+  .remove-btn {
+    background: none; border: none; color: var(--white); font-size: 13px; font-weight: 700;
+    opacity: 0.7; cursor: pointer; padding: 5px 6px;
   }
-  .hidden { display: none !important; }
+
+  #emptyMsg {
+    text-align: center; padding: 26px 14px; margin-top: 14px; border: 2px dashed rgba(255,255,255,0.45);
+    border-radius: 20px; font-size: 14px; font-weight: 400; opacity: 0.9; position: relative; z-index: 1;
+  }
+
+  .clear-row { display: flex; justify-content: flex-end; margin-top: 16px; position: relative; z-index: 1; }
+  .clear-row button { font-size: 13px; padding: 8px 16px; }
+
+  .footer {
+    display: flex; align-items: center; justify-content: space-between; margin-top: 30px;
+    padding: 14px 0 24px; border-top: 1px solid rgba(255,255,255,0.28); position: relative; z-index: 1;
+  }
+  .footer-left { display: flex; align-items: center; gap: 8px; }
+  .bars { display: flex; gap: 1px; align-items: flex-end; height: 13px; }
+  .bars i { display: block; width: 2px; background: var(--white); }
+  .bars i:nth-child(1) { height: 13px; }
+  .bars i:nth-child(2) { width: 1px; height: 8px; }
+  .bars i:nth-child(3) { height: 13px; }
+  .bars i:nth-child(4) { width: 1px; height: 5px; }
+  .bars i:nth-child(5) { height: 13px; }
+  .bars i:nth-child(6) { width: 1px; height: 9px; }
+  .footer-brand { font-size: 9px; letter-spacing: 0.1em; font-weight: 700; opacity: 0.8; }
+  .footer-tracked { font-size: 9px; letter-spacing: 0.1em; font-weight: 700; color: var(--yellow); }
 </style>
 </head>
 <body>
 <div id="app">
-  <header>
-    <h1>Shopping List</h1>
-    <div style="display:flex; align-items:center; gap:12px;">
-      <span id="statusDot" class="status-dot" title="Not connected"></span>
-      <button class="icon-btn" id="settingsToggle" title="Settings">&#9881;</button>
-    </div>
-  </header>
+  <div class="stripe-a"></div>
+  <div class="stripe-b"></div>
 
-  <div class="card" id="settingsPanel">
-    <label for="apiKeyInput">Gemini API key</label>
-    <input type="password" id="apiKeyInput" placeholder="Paste your key from aistudio.google.com/apikey" />
-    <div class="row">
-      <button id="saveKeyBtn">Save</button>
-      <button id="clearKeyBtn" title="Clear saved key">Clear key</button>
-    </div>
-    <small style="color:var(--muted);">
-      Your key stays on this phone (localStorage) &mdash; it's sent straight to Google, never anywhere else.
-      Get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.
-    </small>
+  <div class="eyebrow">
+    <span class="eyebrow-dot"></span>
+    <span class="mono eyebrow-label">SHOPPING LIST TOOLSET V1.0</span>
+    <span class="dotted-line"></span>
+    <span class="mono eyebrow-rev">REV.05</span>
   </div>
 
-  <div class="card">
-    <div id="micWrap">
-      <button id="micBtn">&#127908;</button>
-      <div id="micHint">Tap to start talking</div>
+  <div class="hero">
+    <div class="mono hero-tag">&#9632; SAY IT ONCE</div>
+    <h1>happy<br />shopper</h1>
+  </div>
+
+  <div class="sub-row">
+    <div class="mono sub-copy">VOICE-CONTROLLED SHOPPING UTILITY.<br />SPEAK &mdash; THE LIST UPDATES ITSELF.<br />NO SMALL TALK, NO APOLOGIES.</div>
+    <div class="status-cluster">
+      <div class="status-pill">
+        <span id="statusDot" class="status-dot" title="Not connected"></span>
+        <span id="statusLabel" class="mono status-label">OFF</span>
+      </div>
+      <button class="icon-btn" id="settingsToggle" title="Settings">
+        <span></span><span></span><span></span>
+      </button>
     </div>
   </div>
 
-  <div class="card" id="listSection">
-    <h2>Your list</h2>
-    <div id="addRow">
-      <input type="text" id="addInput" placeholder="Add an item manually&hellip;" />
-      <button id="addBtn">Add</button>
+  <div class="settings-panel hidden" id="settingsPanel">
+    <div class="settings-head">
+      <span class="mono">&#9632; API KEY</span>
+      <button class="close-btn" id="closeSettingsBtn">&#10005;</button>
     </div>
-    <ul id="items"></ul>
-    <div id="emptyMsg" class="hidden">Nothing on the list yet. Say &ldquo;add milk and eggs&rdquo; or type one above.</div>
-    <div id="footerActions">
-      <button id="clearAllBtn">Clear all</button>
+    <input type="password" id="apiKeyInput" placeholder="PASTE GEMINI KEY" />
+    <div class="settings-row">
+      <button id="saveKeyBtn" class="pill-btn-solid">save</button>
+      <button id="clearKeyBtn" class="pill-btn-outline" title="Clear saved key">clear</button>
     </div>
+    <div class="mono settings-note">
+      KEY STAYS ON THIS DEVICE. SENT DIRECTLY TO GOOGLE ONLY.<br />
+      GET ONE AT <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">AISTUDIO.GOOGLE.COM/APIKEY</a>
+    </div>
+  </div>
+
+  <div class="mic-section">
+    <div class="mono mic-side-label">VOICE INPUT &#9654;</div>
+    <div class="mono mic-index">02</div>
+    <div class="mic-wrap">
+      <div id="micRing" class="mic-ring hidden"></div>
+      <button id="micBtn" title="Talk">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="9" y="2" width="6" height="12" rx="3" fill="currentColor" />
+          <path d="M5 10a7 7 0 0 0 14 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          <line x1="12" y1="19" x2="12" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          <line x1="8" y1="22" x2="16" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </svg>
+      </button>
+    </div>
+    <div id="micHint">tap to talk</div>
+  </div>
+
+  <div class="list-head">
+    <h2>the list</h2>
+    <span id="itemCountBadge" class="mono count-badge">0 items</span>
+  </div>
+
+  <div class="add-row">
+    <input type="text" id="addInput" placeholder="add an item" />
+    <button id="addBtn">add</button>
+  </div>
+
+  <ul id="items"></ul>
+
+  <div id="emptyMsg" class="hidden">nothing here yet &mdash; say<br />&ldquo;add milk and eggs&rdquo;</div>
+
+  <div class="clear-row">
+    <button id="clearAllBtn" class="pill-btn-outline">clear all</button>
+  </div>
+
+  <div class="footer">
+    <div class="footer-left">
+      <div class="bars"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <span class="mono footer-brand">SHOP-CO&trade; CORPORATION &reg;</span>
+    </div>
+    <span id="trackedLabel" class="mono footer-tracked">0 TRACKED</span>
   </div>
 </div>
 
@@ -181,6 +304,7 @@
   // ---------- Storage ----------
   const LS_API_KEY = "gemini_shopping_api_key";
   const LS_LIST = "gemini_shopping_list_items";
+  const LS_TRACKED = "gemini_shopping_tracked_total";
   const MODEL = "gemini-3.1-flash-live-preview";
 
   function loadKey() { return localStorage.getItem(LS_API_KEY) || ""; }
@@ -193,29 +317,41 @@
   }
   function saveItems() { localStorage.setItem(LS_LIST, JSON.stringify(items)); }
 
+  function loadTracked() {
+    const n = parseInt(localStorage.getItem(LS_TRACKED) || "0", 10);
+    return Number.isFinite(n) ? n : 0;
+  }
+  function saveTracked() { localStorage.setItem(LS_TRACKED, String(trackedTotal)); }
+
   let items = loadItems(); // [{id, text, done}]
   let nextId = items.reduce((m, it) => Math.max(m, it.id || 0), 0) + 1;
+  let trackedTotal = loadTracked(); // lifetime count of items ever added, just for the footer flourish
 
   // ---------- DOM ----------
   const el = (id) => document.getElementById(id);
   const statusDot = el("statusDot");
+  const statusLabel = el("statusLabel");
   const settingsPanel = el("settingsPanel");
   const settingsToggle = el("settingsToggle");
+  const closeSettingsBtn = el("closeSettingsBtn");
   const apiKeyInput = el("apiKeyInput");
   const saveKeyBtn = el("saveKeyBtn");
   const clearKeyBtn = el("clearKeyBtn");
   const micBtn = el("micBtn");
+  const micRing = el("micRing");
   const micHint = el("micHint");
   const itemsEl = el("items");
   const emptyMsg = el("emptyMsg");
   const addInput = el("addInput");
   const addBtn = el("addBtn");
   const clearAllBtn = el("clearAllBtn");
+  const itemCountBadge = el("itemCountBadge");
+  const trackedLabel = el("trackedLabel");
 
-  // Just a dot: grey = idle, pulsing amber = connecting, green = connected.
-  // No text — the mic button's own hint text carries the actual guidance.
+  // Dot + short mono label: OFF (idle) / SYNC (connecting, blinking) / LIVE (connected).
   function setConnected(mode) {
     statusDot.className = "status-dot" + (mode ? " " + mode : "");
+    statusLabel.textContent = mode === "connected" ? "LIVE" : mode === "connecting" ? "SYNC" : "OFF";
     statusDot.title = mode === "connected" ? "Connected" : mode === "connecting" ? "Connecting…" : "Not connected";
   }
 
@@ -225,6 +361,9 @@
 
   settingsToggle.addEventListener("click", () => {
     settingsPanel.classList.toggle("hidden");
+  });
+  closeSettingsBtn.addEventListener("click", () => {
+    settingsPanel.classList.add("hidden");
   });
   saveKeyBtn.addEventListener("click", () => {
     const v = apiKeyInput.value.trim();
@@ -244,31 +383,44 @@
   function renderList() {
     itemsEl.innerHTML = "";
     emptyMsg.classList.toggle("hidden", items.length > 0);
-    for (const it of items) {
+    itemCountBadge.textContent = items.length + (items.length === 1 ? " item" : " items");
+    trackedLabel.textContent = trackedTotal + " tracked".toUpperCase();
+
+    items.forEach((it, i) => {
       const li = document.createElement("li");
-      if (it.done) li.classList.add("done");
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.checked = !!it.done;
-      cb.addEventListener("change", () => {
-        it.done = cb.checked;
+
+      const check = document.createElement("button");
+      check.className = "check-btn" + (it.done ? " done" : "");
+      check.textContent = it.done ? "✓" : "";
+      check.addEventListener("click", () => {
+        it.done = !it.done;
         saveItems();
         renderList();
       });
+
+      const idx = document.createElement("span");
+      idx.className = "mono idx-num";
+      idx.textContent = String(i + 1).padStart(2, "0");
+
       const span = document.createElement("span");
+      span.className = "item-text" + (it.done ? " done" : "");
       span.textContent = it.text;
+
       const del = document.createElement("button");
+      del.className = "mono remove-btn";
       del.textContent = "✕";
       del.addEventListener("click", () => {
         items = items.filter((x) => x.id !== it.id);
         saveItems();
         renderList();
       });
-      li.appendChild(cb);
+
+      li.appendChild(check);
+      li.appendChild(idx);
       li.appendChild(span);
       li.appendChild(del);
       itemsEl.appendChild(li);
-    }
+    });
   }
   renderList();
 
@@ -304,6 +456,10 @@
         items.push({ id: nextId++, text: name, done: false });
         added.push(name);
       }
+    }
+    if (added.length) {
+      trackedTotal += added.length;
+      saveTracked();
     }
     saveItems();
     renderList();
@@ -648,7 +804,9 @@
     if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
     if (captureCtx) { try { captureCtx.close(); } catch (e) {} captureCtx = null; }
     micBtn.classList.remove("live");
-    micHint.textContent = "Tap to start talking";
+    micRing.classList.add("hidden");
+    micHint.classList.remove("live");
+    micHint.textContent = "tap to talk";
   }
 
   // ---------- Audio: playback (WebSocket -> 24kHz PCM16 -> speaker) ----------
@@ -707,15 +865,17 @@
       try {
         await startMic();
       } catch (micErr) {
-        micHint.textContent = "Microphone access needed — check permissions";
+        micHint.textContent = "mic access needed — check permissions";
         console.error("Mic error:", micErr);
         throw micErr;
       }
       live = true;
       micBtn.classList.add("live");
-      micHint.textContent = "Listening… tap to stop";
+      micRing.classList.remove("hidden");
+      micHint.classList.add("live");
+      micHint.textContent = "listening — tap to stop";
     } catch (e) {
-      // connect() failures already set a specific status + transcript line
+      // connect() failures already log a specific reason to the console
       console.error(e);
     } finally {
       micBtn.disabled = false;
