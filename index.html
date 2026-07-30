@@ -34,24 +34,38 @@
     display: flex; align-items: center; justify-content: space-between;
     margin-bottom: 12px;
   }
-  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
-  #statusPill {
-    font-size: 12px; padding: 4px 10px; border-radius: 999px;
-    background: #2a2a2a; color: var(--muted);
+  header h1 {
+    font-size: 19px; margin: 0; font-weight: 700; letter-spacing: -0.01em;
   }
-  #statusPill.connected { background: #133d24; color: var(--accent-bright); }
-  #statusPill.error { background: #3d1313; color: #f18b7c; }
+  .status-dot {
+    width: 9px; height: 9px; border-radius: 50%; display: inline-block;
+    background: #3a4d43; transition: background 0.25s ease, box-shadow 0.25s ease;
+  }
+  .status-dot.connecting {
+    background: #d9a441; animation: dotpulse 1s ease-in-out infinite;
+  }
+  .status-dot.connected {
+    background: var(--accent-bright); box-shadow: 0 0 8px rgba(41,194,110,0.65);
+  }
+  @keyframes dotpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
   button.icon-btn {
     background: none; border: none; color: var(--muted); font-size: 18px;
-    cursor: pointer; padding: 6px;
+    cursor: pointer; padding: 6px; border-radius: 8px; transition: background 0.15s ease;
   }
+  button.icon-btn:active { background: rgba(255,255,255,0.06); }
   .card {
-    background: var(--card); border-radius: 14px; padding: 14px; margin-bottom: 14px;
+    background: var(--card); border-radius: 16px; padding: 16px; margin-bottom: 14px;
+    border: 1px solid rgba(255,255,255,0.04);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.22);
   }
   #settingsPanel label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
   #settingsPanel input[type=text], #settingsPanel input[type=password] {
     width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #2c4535;
     background: #0e2418; color: var(--text); font-size: 14px; margin-bottom: 10px;
+    transition: border-color 0.15s ease;
+  }
+  #settingsPanel input:focus {
+    outline: none; border-color: var(--accent-bright);
   }
   #settingsPanel .row { display: flex; align-items: center; gap: 8px; }
   #settingsPanel button#saveKeyBtn {
@@ -64,15 +78,20 @@
   }
   #settingsPanel small a { color: var(--accent-bright); }
 
-  #micWrap { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 8px 0 18px; }
+  #micWrap { display: flex; flex-direction: column; align-items: center; gap: 12px; margin: 6px 0 18px; }
   #micBtn {
     width: 96px; height: 96px; border-radius: 50%; border: none;
-    background: var(--accent); color: white; font-size: 34px; cursor: pointer;
+    background: linear-gradient(160deg, var(--accent-bright), var(--accent));
+    color: white; font-size: 34px; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 0 0 0 rgba(41,194,110,0.5);
-    transition: transform 0.15s ease;
+    box-shadow: 0 4px 16px rgba(26,127,75,0.35);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
   }
-  #micBtn.live { background: var(--danger); animation: pulse 1.6s infinite; }
+  #micBtn:active { transform: scale(0.96); }
+  #micBtn.live {
+    background: linear-gradient(160deg, #d9685a, var(--danger));
+    animation: pulse 1.6s infinite;
+  }
   #micBtn:disabled { opacity: 0.4; cursor: default; }
   @keyframes pulse {
     0% { box-shadow: 0 0 0 0 rgba(194,77,61,0.5); }
@@ -83,8 +102,9 @@
 
   #transcript {
     max-height: 120px; overflow-y: auto; font-size: 13px; color: var(--muted);
-    line-height: 1.5; display: flex; flex-direction: column; gap: 2px;
+    line-height: 1.6; display: flex; flex-direction: column; gap: 3px;
   }
+  #transcript:empty { display: none; }
   #transcript .you { color: var(--text); }
   #transcript .gem { color: var(--accent-bright); }
 
@@ -122,8 +142,8 @@
 <div id="app">
   <header>
     <h1>Shopping List</h1>
-    <div style="display:flex; align-items:center; gap:8px;">
-      <span id="statusPill">not connected</span>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <span id="statusDot" class="status-dot" title="Not connected"></span>
       <button class="icon-btn" id="settingsToggle" title="Settings">&#9881;</button>
     </div>
   </header>
@@ -187,7 +207,7 @@
 
   // ---------- DOM ----------
   const el = (id) => document.getElementById(id);
-  const statusPill = el("statusPill");
+  const statusDot = el("statusDot");
   const settingsPanel = el("settingsPanel");
   const settingsToggle = el("settingsToggle");
   const apiKeyInput = el("apiKeyInput");
@@ -202,9 +222,11 @@
   const addBtn = el("addBtn");
   const clearAllBtn = el("clearAllBtn");
 
-  function setStatus(text, cls) {
-    statusPill.textContent = text;
-    statusPill.className = cls || "";
+  // Just a dot: grey = idle, pulsing amber = connecting, green = connected.
+  // No text — the mic button's own hint text carries the actual guidance.
+  function setConnected(mode) {
+    statusDot.className = "status-dot" + (mode ? " " + mode : "");
+    statusDot.title = mode === "connected" ? "Connected" : mode === "connecting" ? "Connecting…" : "Not connected";
   }
 
   function refreshSettingsVisibility() {
@@ -214,26 +236,17 @@
   settingsToggle.addEventListener("click", () => {
     settingsPanel.classList.toggle("hidden");
   });
-  saveKeyBtn.addEventListener("click", async () => {
+  saveKeyBtn.addEventListener("click", () => {
     const v = apiKeyInput.value.trim();
     if (!v) return;
     saveKey(v);
     apiKeyInput.value = "";
     settingsPanel.classList.add("hidden");
-    setStatus("testing key…", "");
-    try {
-      await connect();
-      logLine("gemini", "[key test] Connected to Gemini successfully.");
-      disconnect({ text: "key verified — tap the mic to talk", cls: "connected" });
-    } catch (e) {
-      console.error(e);
-      // onclose/onerror already set a specific status + transcript line
-    }
   });
   clearKeyBtn.addEventListener("click", () => {
     if (!confirm("Clear your saved Gemini API key from this phone?")) return;
     clearKey();
-    disconnect({ text: "not connected", cls: "" });
+    disconnect();
     refreshSettingsVisibility();
   });
 
@@ -396,57 +409,34 @@
   let ws = null;
   let wsReady = false;
   let intentionalClose = false;
-  let intentionalCloseStatus = null;
   let onSetupComplete = null;
-  // Once a session has fully connected once, the key is proven good — any
-  // later drop is not a key problem, and the message shown must say so.
+  // Once a session has fully connected once, the key is proven good — kept
+  // for the console-only diagnostics below, not shown in the UI.
   let hasConnectedOnce = false;
 
   function wsUrl(apiKey) {
     return "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" + encodeURIComponent(apiKey);
   }
 
-  // Turns a raw WebSocket close code into something a non-developer can act on.
-  // A close that happens before any session ever fully connected really is
-  // most likely a bad/unauthorized key. A close that happens after a session
-  // already connected fine is something else entirely (session time limit,
-  // network blip) — the key is proven to work, so don't blame it.
+  // Diagnostics only (console, not UI) — a close before any session ever
+  // fully connected is most likely a bad/unauthorized key; a close after a
+  // session already connected fine is something else (session time limit,
+  // network blip) and the key is proven to work.
   function describeClose(code, reason) {
     const r = (reason || "").trim();
-    if (hasConnectedOnce) {
-      switch (code) {
-        case 1000:
-          return "not connected";
-        case 1006:
-          return "connection dropped (1006) — a network blip or Gemini's session time limit, not your key. Tap the mic to reconnect.";
-        default:
-          return "session ended (" + code + ")" + (r ? ": " + r : "") + " — not a key problem, tap the mic to reconnect";
-      }
-    }
-    switch (code) {
-      case 1000:
-        return "not connected";
-      case 1006:
-        return "connection failed (1006) — check the API key is correct, has no extra spaces, and Generative Language API access is enabled for it";
-      case 1008:
-        return "rejected by server (1008)" + (r ? ": " + r : " — likely an invalid or unauthorized API key");
-      case 1011:
-        return "server error (1011)" + (r ? ": " + r : "");
-      default:
-        return "closed (" + code + ")" + (r ? ": " + r : "");
-    }
+    if (hasConnectedOnce) return "session ended (" + code + ")" + (r ? ": " + r : "") + " — not a key problem";
+    return "connection closed (" + code + ")" + (r ? ": " + r : "") + " — if this is the first ever connect, check the API key";
   }
 
   function connect() {
     const key = loadKey();
     if (!key) {
       settingsPanel.classList.remove("hidden");
-      setStatus("add an API key", "error");
       return Promise.reject(new Error("no key"));
     }
     return new Promise((resolve, reject) => {
       let settled = false;
-      setStatus("connecting…", "");
+      setConnected("connecting");
       ws = new WebSocket(wsUrl(key));
       // The server only marks the session ready after it sends back
       // `setupComplete` — we must wait for that, not just for the socket to open.
@@ -455,7 +445,7 @@
           settled = true;
           wsReady = true;
           hasConnectedOnce = true;
-          setStatus("connected", "connected");
+          setConnected("connected");
           resolve();
         }
       };
@@ -473,7 +463,6 @@
           }
         };
         ws.send(JSON.stringify(setupMessage));
-        setStatus("finishing setup…", "");
       };
       ws.onmessage = (event) => handleServerMessage(event.data);
       ws.onerror = (e) => {
@@ -486,15 +475,10 @@
         onSetupComplete = null;
         const wasIntentional = intentionalClose;
         const wasLive = live;
-        if (wasIntentional) {
-          const s = intentionalCloseStatus || { text: "not connected", cls: "" };
-          setStatus(s.text, s.cls);
-          intentionalClose = false;
-          intentionalCloseStatus = null;
-        } else {
-          const desc = describeClose(event.code, event.reason);
-          setStatus(desc, "error");
-          logLine("gemini", "[disconnected] " + desc);
+        intentionalClose = false;
+        setConnected("idle");
+        if (!wasIntentional) {
+          console.log("[gemini]", describeClose(event.code, event.reason));
         }
         if (!settled) {
           settled = true;
@@ -507,19 +491,17 @@
         // something that already stopped.
         live = false;
         // If you were actively talking when it dropped, try once to pick
-        // the conversation back up automatically instead of leaving you to
-        // notice and re-tap the mic yourself.
+        // the conversation back up automatically — the dot going
+        // idle→connecting→connected is the only feedback needed.
         if (!wasIntentional && wasLive) {
-          logLine("gemini", "[session] Reconnecting automatically…");
           setTimeout(() => { startListening(); }, 1200);
         }
       };
     });
   }
 
-  function disconnect(afterStatus) {
+  function disconnect() {
     intentionalClose = true;
-    intentionalCloseStatus = afterStatus || { text: "not connected", cls: "" };
     if (ws) { try { ws.close(); } catch (e) {} }
     ws = null;
     wsReady = false;
@@ -538,18 +520,15 @@
     }
 
     if (msg.error) {
-      const m = msg.error.message || JSON.stringify(msg.error);
-      logLine("gemini", "[error] " + m);
-      setStatus("error: " + m, "error");
+      console.error("[gemini] server error:", msg.error.message || msg.error);
       return;
     }
 
     if (msg.goAway) {
       // Gemini Live sessions have a maximum duration and the server warns
-      // shortly before cutting the connection — this is expected, not a bug.
-      // The onclose handler that follows will reset things so the next tap
-      // on the mic just starts a fresh session.
-      logLine("gemini", "[session] Gemini is about to end this session (time limit) — tap the mic again after it drops to reconnect.");
+      // shortly before cutting the connection — expected, not a bug. The
+      // onclose handler that follows auto-reconnects if you were mid-talk.
+      console.log("[gemini] session ending soon (time limit), will auto-reconnect if needed");
       return;
     }
 
@@ -742,8 +721,8 @@
       try {
         await startMic();
       } catch (micErr) {
-        setStatus("microphone permission denied", "error");
-        logLine("gemini", "[error] " + micErr.message);
+        micHint.textContent = "Microphone access needed — check permissions";
+        console.error("Mic error:", micErr);
         throw micErr;
       }
       live = true;
@@ -786,10 +765,10 @@
   // storage pressure — a plausible reason the key could go missing on its own.
   if (navigator.storage && navigator.storage.persist) {
     navigator.storage.persist().then((granted) => {
-      logLine("gemini", "[info] persistent storage " + (granted ? "granted" : "not granted"));
+      console.log("[gemini] persistent storage", granted ? "granted" : "not granted");
     }).catch(() => {});
   }
-  logLine("gemini", loadKey() ? "[info] Saved API key found on launch." : "[info] No saved API key found on launch.");
+  console.log("[gemini]", loadKey() ? "saved API key found on launch" : "no saved API key on launch");
 })();
 </script>
 </body>
