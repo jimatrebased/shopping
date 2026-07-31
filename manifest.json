@@ -1,6 +1,6 @@
 {
-  "name": "happy shopper",
-  "short_name": "HappyShop",
+  "name": "unhappy shopper",
+  "short_name": "UnhappyShop",
   "description": "Voice-controlled shopping list powered by the Gemini Live API",
   "id": "./index.html",
   "start_url": "./index.html",
